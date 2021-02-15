@@ -32,13 +32,13 @@ use std::net;
 use std::collections::HashMap;
 
 use ring::rand::*;
+use std::cmp::min;
+use std::convert::TryInto;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
 
 struct PartialResponse {
-    body: Vec<u8>,
-
-    written: usize,
+    size: i32,
 }
 
 struct Client {
@@ -91,7 +91,7 @@ fn main() {
         .unwrap();
 
     config
-        .set_application_protos(b"\x05hq-29\x05hq-28\x05hq-27\x08http/0.9")
+        .set_application_protos(b"\x05hq-29\x05hq-28\x05hq-27\x04perf")
         .unwrap();
 
     config.set_max_idle_timeout(5000);
@@ -318,7 +318,7 @@ fn main() {
                             fin
                         );
 
-                        handle_stream(client, s, stream_buf, "examples/root");
+                        handle_stream(client, s, stream_buf);
                     }
                 }
             }
@@ -364,10 +364,10 @@ fn main() {
             debug!("Collecting garbage");
 
             if c.conn.is_closed() {
-                info!(
-                    "{} connection collected {:?}",
+                println!(
+                    "{} connection collected {}",
                     c.conn.trace_id(),
-                    c.conn.stats()
+                    c.conn.stats().delivery_rate
                 );
             }
 
@@ -435,54 +435,26 @@ fn validate_token<'a>(
 }
 
 /// Handles incoming HTTP/0.9 requests.
-fn handle_stream(client: &mut Client, stream_id: u64, buf: &[u8], root: &str) {
+fn handle_stream(client: &mut Client, stream_id: u64, buf: &[u8]) {
     let conn = &mut client.conn;
 
-    if buf.len() > 4 && &buf[..4] == b"GET " {
-        let uri = &buf[4..buf.len()];
-        let uri = String::from_utf8(uri.to_vec()).unwrap();
-        let uri = String::from(uri.lines().next().unwrap());
-        let uri = std::path::Path::new(&uri);
-        let mut path = std::path::PathBuf::from(root);
-
-        for c in uri.components() {
-            if let std::path::Component::Normal(v) = c {
-                path.push(v)
-            }
-        }
-
+    if buf.len() == 4 {
+        let num: [u8; 4] = buf.try_into().unwrap();
+        let size = i32::from_be_bytes(num);
         info!(
-            "{} got GET request for {:?} on stream {}",
+            "{} got request on stream {}",
             conn.trace_id(),
-            path,
             stream_id
         );
-
-        let body = std::fs::read(path.as_path())
-            .unwrap_or_else(|_| b"Not Found!\r\n".to_vec());
 
         info!(
             "{} sending response of size {} on stream {}",
             conn.trace_id(),
-            body.len(),
+            size,
             stream_id
         );
 
-        let written = match conn.stream_send(stream_id, &body, true) {
-            Ok(v) => v,
-
-            Err(quiche::Error::Done) => 0,
-
-            Err(e) => {
-                error!("{} stream send failed {:?}", conn.trace_id(), e);
-                return;
-            },
-        };
-
-        if written < body.len() {
-            let response = PartialResponse { body, written };
-            client.partial_responses.insert(stream_id, response);
-        }
+        write_data(client, stream_id, size)
     }
 }
 
@@ -496,25 +468,35 @@ fn handle_writable(client: &mut Client, stream_id: u64) {
         return;
     }
 
-    let resp = client.partial_responses.get_mut(&stream_id).unwrap();
-    let body = &resp.body[resp.written..];
+    let size = client.partial_responses.get_mut(&stream_id).unwrap().size;
+    write_data(client, stream_id, size)
+}
 
-    let written = match conn.stream_send(stream_id, &body, true) {
-        Ok(v) => v,
+fn write_data(client: &mut Client, stream_id: u64, mut size : i32) {
+    let conn = &mut client.conn;
+    loop {
+        let body = [0; 2048];
+        let len = min(2048, size as usize);
+        let written = match conn.stream_send(stream_id, &body[..len], size <= 2048) {
+            Ok(v) => v,
 
-        Err(quiche::Error::Done) => 0,
+            Err(quiche::Error::Done) => 0,
 
-        Err(e) => {
-            client.partial_responses.remove(&stream_id);
+            Err(e) => {
+                error!("{} stream send failed {:?}", conn.trace_id(), e);
+                return;
+            },
+        };
 
-            error!("{} stream send failed {:?}", conn.trace_id(), e);
+        size -= written as i32;
+        if written < body.len() as usize {
+            let response = PartialResponse { size };
+            client.partial_responses.insert(stream_id, response);
             return;
-        },
-    };
-
-    resp.written += written;
-
-    if resp.written == resp.body.len() {
-        client.partial_responses.remove(&stream_id);
+        }
+        if size == 0 {
+            client.partial_responses.remove(&stream_id);
+            return;
+        }
     }
 }
