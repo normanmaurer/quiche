@@ -36,6 +36,7 @@ use std::cmp::min;
 use std::convert::TryInto;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
+const CHUNK_SIZE: usize = 2048;
 
 struct PartialResponse {
     size: i32,
@@ -487,6 +488,9 @@ fn write_data(client: &mut Client, stream_id: u64, mut size : i32) {
                 return;
             },
         };
+        if written == 0 {
+            println!("No space left");
+        }
 
         size -= written as i32;
         if written < body.len() as usize {
