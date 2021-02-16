@@ -37,14 +37,15 @@ use std::convert::TryInto;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
 const CHUNK_SIZE: usize = 2048;
+const MAX_SEND_BURST_LIMIT: usize = MAX_DATAGRAM_SIZE * 10;
 
 struct PartialResponse {
-    size: i32,
+    size: usize,
 }
 
 struct Client {
     conn: std::pin::Pin<Box<quiche::Connection>>,
-
+    bytes_sent: usize,
     partial_responses: HashMap<u64, PartialResponse>,
 }
 
@@ -112,13 +113,17 @@ fn main() {
         ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &rng).unwrap();
 
     let mut clients = ClientMap::new();
+    let mut continue_write = false;
 
     loop {
         // Find the shorter timeout from all the active connections.
         //
         // TODO: use event loop that properly supports timers
-        let timeout =
-            clients.values().filter_map(|(_, c)| c.conn.timeout()).min();
+        let timeout = match continue_write {
+            true => Some(std::time::Duration::from_secs(0)),
+
+            false => clients.values().filter_map(|(_, c)| c.conn.timeout()).min(),
+        };
 
         poll.poll(&mut events, timeout).unwrap();
 
@@ -128,7 +133,7 @@ fn main() {
             // If the event loop reported no events, it means that the timeout
             // has expired, so handle it without attempting to read packets. We
             // will then proceed with the send loop.
-            if events.is_empty() {
+            if events.is_empty() && !continue_write {
                 debug!("timed out");
 
                 clients.values_mut().for_each(|(_, c)| c.conn.on_timeout());
@@ -267,6 +272,7 @@ fn main() {
                 let client = Client {
                     conn,
                     partial_responses: HashMap::new(),
+                    bytes_sent: 0
                 };
 
                 clients.insert(scid.clone(), (src, client));
@@ -325,6 +331,7 @@ fn main() {
             }
         }
 
+        continue_write = false;
         // Generate outgoing QUIC packets for all active connections and send
         // them on the UDP socket, until quiche reports that there are no more
         // packets to be sent.
@@ -357,6 +364,21 @@ fn main() {
                 }
 
                 debug!("{} written {} bytes", client.conn.trace_id(), write);
+
+
+                // limit write bursting
+                client.bytes_sent += write;
+
+                if client.bytes_sent >= MAX_SEND_BURST_LIMIT {
+                    debug!(
+                        "{} pause writing at {}",
+                        client.conn.trace_id(),
+                        client.bytes_sent
+                    );
+                    client.bytes_sent = 0;
+                    //continue_write = true;
+                    //break;
+                }
             }
         }
 
@@ -441,7 +463,7 @@ fn handle_stream(client: &mut Client, stream_id: u64, buf: &[u8]) {
 
     if buf.len() == 4 {
         let num: [u8; 4] = buf.try_into().unwrap();
-        let size = i32::from_be_bytes(num);
+        let size = i32::from_be_bytes(num) as usize;
         info!(
             "{} got request on stream {}",
             conn.trace_id(),
@@ -473,12 +495,12 @@ fn handle_writable(client: &mut Client, stream_id: u64) {
     write_data(client, stream_id, size)
 }
 
-fn write_data(client: &mut Client, stream_id: u64, mut size : i32) {
+fn write_data(client: &mut Client, stream_id: u64, mut size : usize) {
     let conn = &mut client.conn;
     loop {
-        let body = [0; 2048];
-        let len = min(2048, size as usize);
-        let written = match conn.stream_send(stream_id, &body[..len], size <= 2048) {
+        let body = [0; CHUNK_SIZE];
+        let len = min(CHUNK_SIZE, size);
+        let written = match conn.stream_send(stream_id, &body[..len], size <= CHUNK_SIZE) {
             Ok(v) => v,
 
             Err(quiche::Error::Done) => 0,
@@ -492,7 +514,7 @@ fn write_data(client: &mut Client, stream_id: u64, mut size : i32) {
             println!("No space left");
         }
 
-        size -= written as i32;
+        size -= written;
         if written < body.len() as usize {
             let response = PartialResponse { size };
             client.partial_responses.insert(stream_id, response);
