@@ -576,6 +576,14 @@ impl Handshake {
         let rc = unsafe { SSL_do_handshake(self.as_mut_ptr()) };
         self.set_ex_data::<Connection>(*QUICHE_EX_DATA_INDEX, std::ptr::null())?;
 
+        if rc != 0 && self.get_error(rc) == 1 {
+            let error: u64 = TLS_ALERT_ERROR;// + u64::from(alert);
+            *ex_data.local_error = Some(ConnectionError {
+                is_app: false,
+                error_code: error,
+                reason: Vec::new(),
+            });
+        }
         map_result_ssl(self, rc)
     }
 
