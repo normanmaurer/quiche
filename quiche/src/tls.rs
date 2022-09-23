@@ -919,6 +919,12 @@ extern fn flush_flight(_ssl: *mut SSL) -> c_int {
 }
 
 extern fn send_alert(ssl: *mut SSL, level: crypto::Level, alert: u8) -> c_int {
+    trace!(
+        "pre send alert lvl={:?} alert={:x}",
+        level,
+        alert
+    );
+
     let ex_data = match get_ex_data_from_ptr::<ExData>(ssl, *QUICHE_EX_DATA_INDEX)
     {
         Some(v) => v,
