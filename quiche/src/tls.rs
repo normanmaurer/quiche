@@ -460,7 +460,7 @@ impl Handshake {
         let cstr = ffi::CString::new(name).map_err(|_| Error::TlsFail)?;
         let rc =
             unsafe { SSL_set_tlsext_host_name(self.as_mut_ptr(), cstr.as_ptr()) };
-        map_result_ssl(self, rc)?;
+        map_result_ssl(self, rc, None)?;
 
         let param = unsafe { SSL_get0_param(self.as_mut_ptr()) };
 
@@ -477,7 +477,7 @@ impl Handshake {
                 buf.len(),
             )
         };
-        map_result_ssl(self, rc)
+        map_result_ssl(self, rc, None)
     }
 
     #[cfg(test)]
@@ -568,7 +568,7 @@ impl Handshake {
                 buf.len(),
             )
         };
-        map_result_ssl(self, rc)
+        map_result_ssl(self, rc, None)
     }
 
     pub fn do_handshake(&mut self, ex_data: &mut ExData) -> Result<()> {
@@ -576,7 +576,7 @@ impl Handshake {
         let rc = unsafe { SSL_do_handshake(self.as_mut_ptr()) };
         self.set_ex_data::<Connection>(*QUICHE_EX_DATA_INDEX, std::ptr::null())?;
 
-        map_result_ssl(self, rc)
+        map_result_ssl(self, rc, Some(ex_data))
     }
 
     pub fn process_post_handshake(&mut self, ex_data: &mut ExData) -> Result<()> {
@@ -591,7 +591,7 @@ impl Handshake {
         let rc = unsafe { SSL_process_quic_post_handshake(self.as_mut_ptr()) };
         self.set_ex_data::<Connection>(*QUICHE_EX_DATA_INDEX, std::ptr::null())?;
 
-        map_result_ssl(self, rc)
+        map_result_ssl(self, rc, Some(ex_data))
     }
 
     pub fn reset_early_data_reject(&mut self) {
@@ -716,7 +716,7 @@ impl Handshake {
 
     pub fn clear(&mut self) -> Result<()> {
         let rc = unsafe { SSL_clear(self.as_mut_ptr()) };
-        map_result_ssl(self, rc)
+        map_result_ssl(self, rc, None)
     }
 
     fn as_ptr(&self) -> *const SSL {
@@ -1093,7 +1093,9 @@ fn map_result_ptr<'a, T>(bssl_result: *const T) -> Result<&'a T> {
     }
 }
 
-fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
+fn map_result_ssl(
+    ssl: &mut Handshake, bssl_result: c_int, data: Option<&mut ExData>,
+) -> Result<()> {
     match bssl_result {
         1 => Ok(()),
 
@@ -1104,6 +1106,18 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
                 1 => {
                     log_ssl_error();
 
+                    // SSL_ERROR_SSL can't be recovered so ensure we set a
+                    // local_error so the connection is closed.
+                    // See https://www.openssl.org/docs/man1.1.1/man3/SSL_get_error.html
+                    if let Some(ex_data) = data {
+                        if ex_data.local_error.is_none() {
+                            *ex_data.local_error = Some(ConnectionError {
+                                is_app: false,
+                                error_code: TLS_ALERT_ERROR,
+                                reason: Vec::new(),
+                            })
+                        }
+                    }
                     Err(Error::TlsFail)
                 },
 
