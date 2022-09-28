@@ -5959,6 +5959,7 @@ impl Connection {
             is_server: self.is_server,
         };
 
+        trace!("Handshake completed {}", self.handshake_completed);
         if self.handshake_completed {
             return self.handshake.process_post_handshake(&mut ex_data);
         }
