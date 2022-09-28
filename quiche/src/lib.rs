@@ -2866,6 +2866,8 @@ impl Connection {
         &mut self, out: &mut [u8], from: Option<SocketAddr>,
         to: Option<SocketAddr>,
     ) -> Result<(usize, SendInfo)> {
+        trace!("send_on_path: {:?} {} {}", self.local_error, self.is_closed(), self.is_draining());
+
         if out.is_empty() {
             return Err(Error::BufferTooShort);
         }
@@ -2873,6 +2875,7 @@ impl Connection {
         if self.is_closed() || self.is_draining() {
             return Err(Error::Done);
         }
+
 
         if self.local_error.is_none() {
             self.do_handshake()?;
