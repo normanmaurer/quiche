@@ -1973,10 +1973,6 @@ impl Connection {
     pub fn recv(&mut self, buf: &mut [u8], info: RecvInfo) -> Result<usize> {
         let len = buf.len();
 
-        if len == 0 {
-            return Err(Error::BufferTooShort);
-        }
-
         let recv_pid = self.paths.path_id_from_addrs(&(info.to, info.from));
 
         if let Some(recv_pid) = recv_pid {
