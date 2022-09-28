@@ -1115,7 +1115,7 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
 
                 // SSL_ERROR_WANT_X509_LOOKUP
                 4 => {
-                    log_ssl_error();
+                    trace!("SSL_ERROR_WANT_X509_LOOKUP");
 
                     Err(Error::Done)
                 },
@@ -1129,13 +1129,14 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
                 // SSL_ERROR_PENDING_CERTIFICATE
                 12 => {
                     log_ssl_error();
+                    trace!("SSL_ERROR_PENDING_CERTIFICATE");
 
                     Err(Error::Done)
                 },
 
                 // SSL_ERROR_WANT_PRIVATE_KEY_OPERATION
                 13 => {
-                    log_ssl_error();
+                    trace!("SSL_ERROR_WANT_PRIVATE_KEY_OPERATION");
 
                     Err(Error::Done)
                 },
@@ -1151,7 +1152,7 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
 
                 // SSL_ERROR_WANT_CERTIFICATE_VERIFY
                 16 => {
-                    log_ssl_error();
+                    trace!("SSL_ERROR_WANT_CERTIFICATE_VERIFY");
 
                     Err(Error::Done)
                 },
