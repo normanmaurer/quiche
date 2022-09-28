@@ -1114,7 +1114,11 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
                 3 => Err(Error::Done),
 
                 // SSL_ERROR_WANT_X509_LOOKUP
-                4 => Err(Error::Done),
+                4 => {
+                    log_ssl_error();
+
+                    Err(Error::Done)
+                },
 
                 // SSL_ERROR_SYSCALL
                 5 => Err(Error::TlsFail),
@@ -1123,10 +1127,18 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
                 11 => Err(Error::Done),
 
                 // SSL_ERROR_PENDING_CERTIFICATE
-                12 => Err(Error::Done),
+                12 => {
+                    log_ssl_error();
+
+                    Err(Error::Done)
+                },
 
                 // SSL_ERROR_WANT_PRIVATE_KEY_OPERATION
-                13 => Err(Error::Done),
+                13 => {
+                    log_ssl_error();
+
+                    Err(Error::Done)
+                },
 
                 // SSL_ERROR_PENDING_TICKET
                 14 => Err(Error::Done),
@@ -1138,7 +1150,11 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
                 },
 
                 // SSL_ERROR_WANT_CERTIFICATE_VERIFY
-                16 => Err(Error::Done),
+                16 => {
+                    log_ssl_error();
+
+                    Err(Error::Done)
+                },
 
                 _ => Err(Error::TlsFail),
             }
