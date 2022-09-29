@@ -2347,7 +2347,6 @@ impl Connection {
                     let pkt = (b.buf()[..pkt_len]).to_vec();
 
                     self.undecryptable_pkts.push_back((pkt, *info));
-                    self.undecryptable_pkts.push_back((pkt, *info));
                     return Ok(pkt_len);
                 } else {
                     trace!("no ahead: {:?}", hdr.ty)
