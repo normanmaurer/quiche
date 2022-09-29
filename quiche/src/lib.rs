@@ -2334,7 +2334,7 @@ impl Connection {
             Some(v) => v,
 
             None => {
-                if (hdr.ty == packet::Type::ZeroRTT || hdr.ty == packet::Type::Short) &&
+                if (hdr.ty == packet::Type::ZeroRTT) &&
                     self.undecryptable_pkts.len() < MAX_UNDECRYPTABLE_PACKETS &&
                     !self.is_established()
                 {
@@ -2346,6 +2346,7 @@ impl Connection {
                     let pkt_len = b.off() + payload_len;
                     let pkt = (b.buf()[..pkt_len]).to_vec();
 
+                    self.undecryptable_pkts.push_back((pkt, *info));
                     self.undecryptable_pkts.push_back((pkt, *info));
                     return Ok(pkt_len);
                 } else {

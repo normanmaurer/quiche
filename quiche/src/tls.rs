@@ -576,7 +576,10 @@ impl Handshake {
         let rc = unsafe { SSL_do_handshake(self.as_mut_ptr()) };
         trace!("SSL_do_handshake(...) {} {}", rc, self.get_error(rc));
         self.set_ex_data::<Connection>(*QUICHE_EX_DATA_INDEX, std::ptr::null())?;
-
+        if rc != 1 {
+            let ssl_err = ssl.get_error(rc);
+            trace!("{} SSL_do_handshake: {}", ex_data.trace_id, ssl_err);
+        }
         map_result_ssl(self, rc)
     }
 
@@ -1116,8 +1119,6 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
 
                 // SSL_ERROR_WANT_X509_LOOKUP
                 4 => {
-                    trace!("SSL_ERROR_WANT_X509_LOOKUP");
-
                     Err(Error::Done)
                 },
 
@@ -1129,16 +1130,11 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
 
                 // SSL_ERROR_PENDING_CERTIFICATE
                 12 => {
-                    log_ssl_error();
-                    trace!("SSL_ERROR_PENDING_CERTIFICATE");
-
                     Err(Error::Done)
                 },
 
                 // SSL_ERROR_WANT_PRIVATE_KEY_OPERATION
                 13 => {
-                    trace!("SSL_ERROR_WANT_PRIVATE_KEY_OPERATION");
-
                     Err(Error::Done)
                 },
 
@@ -1153,8 +1149,6 @@ fn map_result_ssl(ssl: &mut Handshake, bssl_result: c_int) -> Result<()> {
 
                 // SSL_ERROR_WANT_CERTIFICATE_VERIFY
                 16 => {
-                    trace!("SSL_ERROR_WANT_CERTIFICATE_VERIFY");
-
                     Err(Error::Done)
                 },
 
