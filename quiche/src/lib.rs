@@ -2334,7 +2334,7 @@ impl Connection {
             Some(v) => v,
 
             None => {
-                if hdr.ty == packet::Type::ZeroRTT &&
+                if (hdr.ty == packet::Type::ZeroRTT || hdr.ty == packet::Type::Short) &&
                     self.undecryptable_pkts.len() < MAX_UNDECRYPTABLE_PACKETS &&
                     !self.is_established()
                 {
