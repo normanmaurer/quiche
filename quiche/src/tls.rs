@@ -577,7 +577,7 @@ impl Handshake {
         trace!("SSL_do_handshake(...) {} {}", rc, self.get_error(rc));
         self.set_ex_data::<Connection>(*QUICHE_EX_DATA_INDEX, std::ptr::null())?;
         if rc != 1 {
-            let ssl_err = ssl.get_error(rc);
+            let ssl_err = self.get_error(rc);
             trace!("{} SSL_do_handshake: {}", ex_data.trace_id, ssl_err);
         }
         map_result_ssl(self, rc)
