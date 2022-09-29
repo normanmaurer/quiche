@@ -2348,6 +2348,8 @@ impl Connection {
 
                     self.undecryptable_pkts.push_back((pkt, *info));
                     return Ok(pkt_len);
+                } else {
+                    trace!("no ahead: {:?}", hdr.ty)
                 }
 
                 let e = drop_pkt_on_err(
@@ -5966,6 +5968,7 @@ impl Connection {
         if self.handshake_completed {
             return self.handshake.process_post_handshake(&mut ex_data);
         }
+
 
         match self.handshake.do_handshake(&mut ex_data) {
             Ok(_) => (),
