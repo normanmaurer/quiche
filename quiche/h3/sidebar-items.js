@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["APPLICATION_PROTOCOL"],"enum":["Error","Event"],"struct":["Config","Connection","Header","HeaderRef","Priority"],"trait":["NameValue"],"type":["Result"]};
