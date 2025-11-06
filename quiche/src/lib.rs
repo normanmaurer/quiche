@@ -2023,6 +2023,15 @@ impl<F: BufFactory> Connection<F> {
         scid: &ConnectionId, dcid: Option<&ConnectionId>, local: SocketAddr,
         peer: SocketAddr, config: &Config, tls: tls::Handshake, is_server: bool,
     ) -> Result<Connection<F>> {
+        if !is_server {
+            if let Some(dcid) = dcid {
+                // The Minimum length is 8.
+                // See https://datatracker.ietf.org/doc/html/rfc9000#section-7.2-3
+                if dcid.to_vec().len() < 8 {
+                    return Err(Error::InvalidTransportParam);
+                }
+            }
+        }
         let max_rx_data = config.local_transport_params.initial_max_data;
 
         let scid_as_hex: Vec<String> =
