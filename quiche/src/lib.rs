@@ -1772,6 +1772,9 @@ pub fn connect(
 }
 
 /// Creates a new client-side connection using the given dcid initially.
+/// Be aware the RFC places requirements for unpredictability and length
+/// on the client DCID field.
+/// [`RFC9000`]:  https://datatracker.ietf.org/doc/html/rfc9000#section-7.2-3
 ///
 /// The `scid` parameter is used as the connection's source connection ID,
 /// while the optional `server_name` parameter is used to verify the peer's
@@ -1811,6 +1814,9 @@ pub fn connect_with_buffer_factory<F: BufFactory>(
 
 /// Creates a new client-side connection, with a custom buffer generation
 /// method using the given dcid initially.
+/// Be aware the RFC places requirements for unpredictability and length
+/// on the client DCID field.
+/// [`RFC9000`]:  https://datatracker.ietf.org/doc/html/rfc9000#section-7.2-3
 ///
 /// The buffers generated can be anything that can be drereferenced as a byte
 /// slice. See [`connect`] and [`BufFactory`] for more info.
